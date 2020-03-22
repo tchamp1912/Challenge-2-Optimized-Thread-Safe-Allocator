@@ -5,6 +5,7 @@
 
 // Linked list cell.
 typedef struct cell {
+    size_t curr_size;     // size of one block
     long         item;
     struct cell* rest;
 } cell;
@@ -53,6 +54,13 @@ copy_list(cell* xs)
     cell* ys = copy_list(xs->rest);
     return cons(xs->item, ys);
 }
+
+///////////////////////////////////////
+/////// From HW08 /////////////////////
+///////////////////////////////////////
+
+
+static
 
 #endif
 
