@@ -1,9 +1,10 @@
 
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <string.h>
 #include <stdio.h>
 
-#include "hmalloc.h"
+#include "hwx_malloc.h"
 
 /*
   typedef struct hm_stats {
@@ -140,7 +141,7 @@ _add_to_free_list(node_t *curr_node, node_t *free_mem, int coalesce)
 					break;
 				}
 
-			} while (curr_node = curr_node->next);
+			} while ((curr_node = curr_node->next));
 			
 			// check if new node allows for coalescing	
 			if (coalesce) {
@@ -285,7 +286,7 @@ xmalloc(size_t size)
 					// save previous node
 					prev_node = curr_node;
 
-				} while (curr_node = curr_node->next);
+				} while ((curr_node = curr_node->next));
 			}
 
 		// add header to alloced memory
@@ -327,34 +328,105 @@ xfree(void* item)
     stats.chunks_freed += 1;
 
     // Actually free the items
-		node_t *curr_node;
 		node_t *free_node;
-		size_t block_size;
+		header_t *block_header;
 
 		// size of memory block to free
-		block_size = *((size_t*) (item - (sizeof(header_t))));
+		block_header = ((header_t*) (item - (sizeof(header_t))));
 
-		if ((block_size) >= PAGE_SIZE - sizeof(header_t)) {
+		if ((block_header->size) >= PAGE_SIZE - sizeof(header_t)) {
+
 			// immediately munmap any allocation greater than or equal to page
-			stats.pages_unmapped += div_up(block_size, PAGE_SIZE - sizeof(header_t));
-			munmap(item - sizeof(header_t), block_size);
+			stats.pages_unmapped += div_up(block_header->size, PAGE_SIZE - sizeof(header_t));
+			munmap(item - sizeof(header_t), block_header->size);
 
 		}
 
 		else if (!FREE_LIST) {
+
 			// add first element to free list
 			FREE_LIST = item - sizeof(header_t);
-			FREE_LIST->size = block_size - (sizeof(node_t) - sizeof(header_t));
+			FREE_LIST->size = block_header->size - (sizeof(node_t) - sizeof(header_t));
 			MUNMAP = (MUNMAP)?MUNMAP:!(MUNMAP);
 
 		}
 
 		else {
+
 			// address to beginning of free block
 			free_node = item - sizeof(header_t);
-			free_node->size = block_size - (sizeof(node_t) - sizeof(header_t));
+			free_node->size = block_header->size - (sizeof(node_t) - sizeof(header_t));
 			_add_to_free_list(FREE_LIST, free_node, 1);	
 			MUNMAP = (MUNMAP)?MUNMAP:!(MUNMAP);
+
+		}	
+}
+
+void*
+xrealloc(void *item, size_t size)
+{
+
+		size_t new_free;
+		void *new_ptr;
+		header_t *block_header;
+
+		// size of memory block to realloc;
+		block_header = ((header_t*) (item - (sizeof(header_t))));
+
+		// less memory is required
+		if (block_header->size >= size + sizeof(node_t) + 1) {
+
+			node_t *free_mem;
+
+			// new size of memory to add to free list
+			new_free = block_header->size - size;
+
+			// set block size to new realloc size
+			block_header->size = size;
+
+			// increment pointer value by new size
+			free_mem = (node_t*) (item + size);
+
+			// subtract mapping overhead
+			new_free -= sizeof(node_t);
+			free_mem->size = new_free;
+
+			// if free list is empty add free memory to it
+			if (FREE_LIST == NULL) {
+					free_mem->next = NULL;
+					FREE_LIST = free_mem;
+
+			}
+			// if not first eleement add to free list
+			else {
+
+				_add_to_free_list(FREE_LIST, free_mem, 0);
+			}
+
+			return item;
+
+		}
+
+		// more memory is required
+		else if (block_header->size < size) {
+			
+			// allocate new memory
+			new_ptr = xmalloc(size);
+
+			// copy old memory to new memory
+			memcpy(new_ptr, item, block_header->size);
+
+			// free old memory
+			xfree(item);
+	
+			return new_ptr;
+			
+		}
+		// edge case if they are equal
+		else {
+
+			// return old pointer
+			return item;
 
 		}	
 }
