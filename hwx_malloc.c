@@ -153,11 +153,12 @@ xmalloc(size_t size) {
         mutex_init_flag = 1;
     }
 
-    void *alloced;
+    void *alloced = NULL;
     header_t *header_alloced;
     node_t *free_mem;
     node_t *curr_node;
-    size_t pages, total_mapped, new_free;
+    size_t pages, total_mapped, new_free = -1;
+    int new_free_init_flag = 0;
 
     stats.chunks_allocated += 1;
 
@@ -188,12 +189,12 @@ xmalloc(size_t size) {
                        (PROT_READ | PROT_WRITE),
                        (MAP_ANON | MAP_PRIVATE),
                        -1, 0);
-
         // increment munmap flag
         MUNMAP += 1;
 
         // set size of new free node
         new_free = (total_mapped - size);
+        new_free_init_flag = 1;
 
     }
         // check if there is free allocated data on heap
@@ -289,18 +290,22 @@ xmalloc(size_t size) {
             prev_node = curr_node;
 
         } while ((curr_node = curr_node->next));
+
         pthread_mutex_unlock(&free_list_lock);
+        new_free_init_flag = 1;
     }
 
     // add header to alloced memory
     header_alloced = (header_t *) alloced;
-    header_alloced->size = (size - sizeof(header_t));
+    if(alloced) {
+        header_alloced->size = (size - sizeof(header_t));
 
-    // increment alloced pointer by header size
-    alloced += sizeof(header_t);
+        // increment alloced pointer by header size
+        alloced += sizeof(header_t);
+    }
 
     // add any unallocated but mapped data to free list
-    if (new_free && size < PAGE_SIZE) {
+    if (new_free_init_flag && size < PAGE_SIZE) {
 
         // find beginning of free memory
         free_mem = (node_t *) (((void *) header_alloced) + size);

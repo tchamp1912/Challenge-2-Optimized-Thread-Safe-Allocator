@@ -4,7 +4,16 @@ overs JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, And
 # Make output files
 *.o
 collatz-ivec-sys
+collatz-ivec-opt
+collatz-ivec-hwx
 collatz-list-sys
+collatz-list-opt
+collatz-list-hwx
+frag-hwx
+frag-opt
+frag-sys
+outp.tmp
+time.tmp
 
 # Toplevel User-specific files
 CMakeLists.txt
