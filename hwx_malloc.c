@@ -21,8 +21,8 @@ const size_t PAGE_SIZE = 4096;
 static hm_stats stats; // This initializes the stats to 0.
 static node_t *FREE_LIST = NULL;
 static int MUNMAP = 1;
-pthread_mutex_t free_list_lock;
-int mutex_init_flag = 0;
+static pthread_mutex_t free_list_lock;
+static int mutex_init_flag = 0;
 
 long
 free_list_length() {
@@ -32,7 +32,8 @@ free_list_length() {
 
     while (curr_node != NULL) {
         // if node isnt null increment
-        length++;
+				printf("%ld\n", curr_node->size);
+        length += curr_node->size;
         curr_node = curr_node->next;
     }
 
@@ -161,6 +162,7 @@ xmalloc(size_t size) {
 
     stats.chunks_allocated += 1;
 
+		hprintstats();
     // add necessary mapping overhead
     size += sizeof(header_t);
 
@@ -204,6 +206,7 @@ xmalloc(size_t size) {
 
         // iterate over free list while next isnt null
         do {
+						printf("%ld\n", curr_node->size);
             // check if there is enough memory in free node to split it into
             if (curr_node->size >= size + 1) {
                 // save values before overwriting them
@@ -238,11 +241,18 @@ xmalloc(size_t size) {
             }
                 // check if there is exactly enough space
             else if (curr_node->size + sizeof(node_t) == size) {
-                // remove current node from free list
-                prev_node->next = curr_node->next;
 
                 // reallocated freed memory
                 alloced = curr_node;
+
+								if (curr_node == FREE_LIST) {
+									// if head of list; set to null
+									FREE_LIST = NULL;
+								}
+								else {
+                	// remove current node from free list
+                	prev_node->next = curr_node->next;
+								}
 
                 // no new free memory
                 new_free = 0;
