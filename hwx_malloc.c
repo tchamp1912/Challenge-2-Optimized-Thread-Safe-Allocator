@@ -157,8 +157,7 @@ xmalloc(size_t size) {
     header_t *header_alloced;
     node_t *free_mem;
     node_t *curr_node;
-    size_t pages, total_mapped, new_free = -1;
-    int new_free_init_flag = 0;
+    size_t pages, total_mapped, new_free = 0;
 
     stats.chunks_allocated += 1;
 
@@ -194,8 +193,6 @@ xmalloc(size_t size) {
 
         // set size of new free node
         new_free = (total_mapped - size);
-        new_free_init_flag = 1;
-
     }
         // check if there is free allocated data on heap
     else {
@@ -292,20 +289,17 @@ xmalloc(size_t size) {
         } while ((curr_node = curr_node->next));
 
         pthread_mutex_unlock(&free_list_lock);
-        new_free_init_flag = 1;
     }
 
     // add header to alloced memory
     header_alloced = (header_t *) alloced;
-    if(alloced) {
-        header_alloced->size = (size - sizeof(header_t));
+    header_alloced->size = (size - sizeof(header_t));
 
-        // increment alloced pointer by header size
-        alloced += sizeof(header_t);
-    }
+    // increment alloced pointer by header size
+    alloced += sizeof(header_t);
 
     // add any unallocated but mapped data to free list
-    if (new_free_init_flag && size < PAGE_SIZE) {
+    if (new_free && size < PAGE_SIZE) {
 
         // find beginning of free memory
         free_mem = (node_t *) (((void *) header_alloced) + size);
@@ -314,6 +308,7 @@ xmalloc(size_t size) {
         new_free -= sizeof(node_t);
         free_mem->size = new_free;
 
+        pthread_mutex_lock(&free_list_lock);
         // if free list is empty add free memory to it
         if (FREE_LIST == NULL) {
             free_mem->next = NULL;
@@ -325,6 +320,7 @@ xmalloc(size_t size) {
             _add_to_free_list(FREE_LIST, free_mem, 0);
 
         }
+        pthread_mutex_unlock(&free_list_lock);
     }
     // return allocated memory pointer
     return alloced;
