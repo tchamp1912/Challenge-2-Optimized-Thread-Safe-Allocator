@@ -360,7 +360,8 @@ xfree(void *item) {
         _add_to_free_list(FREE_LIST, free_node, 1);
         MUNMAP = (MUNMAP) ? MUNMAP : !(MUNMAP);
     }
-    pthread_mutex_lock(&free_list_lock);
+
+    pthread_mutex_unlock(&free_list_lock);
 
 }
 
