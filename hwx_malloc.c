@@ -218,15 +218,27 @@ xfree(void* item)
 void *
 xrealloc(void *item, size_t size) {
 
+    // if you're trying to reallocate the head,
+    // you are trying to realloc the entire list
+    if (item == NULL) {
+        return xmalloc(size);
+    }
+
     size_t new_free;
     void *new_ptr;
-    llist_node *block_header;
 
-    // size of memory block to realloc;
-    block_header = ((llist_node *) (item - (sizeof(llist_node))));
+    // size of memory block to realloc:
+
+    /*
+     * I was gonna see if I could make this void* and use sizeof(block_header) to keep
+     * track of the how much memory is being realloced....
+     * but then i accidently settled on this, and im not sure why by substracting
+     * the size a normal size_t works
+     */
+    llist_node *block_header = ((llist_node *) (item - (sizeof(size_t))));
 
     // less memory is required
-    if (block_header->size >= size + sizeof(llist_node) + 1) {
+    if (block_header->size > size + sizeof(llist_node)) {
 
         llist_node *free_mem;
 
@@ -250,7 +262,7 @@ xrealloc(void *item, size_t size) {
             free_list_head = free_mem;
 
         }
-            // if not first eleement add to free list
+        // if not first element add to free list
         else {
             llist_insert(free_list_head, free_mem);
         }
@@ -259,8 +271,7 @@ xrealloc(void *item, size_t size) {
 
         return item;
     }
-
-        // more memory is required
+    // more memory is required
     else if (block_header->size < size) {
 
         // allocate new memory
@@ -275,12 +286,10 @@ xrealloc(void *item, size_t size) {
         return new_ptr;
 
     }
-        // edge case if they are equal
+    // edge case if they are equal
     else {
-
         // return old pointer
         return item;
-
     }
 }
 
@@ -307,14 +316,10 @@ llist_length(llist_node* list_head)
     return length;
 }
 
+//inserts a given node and coelesces it when necessary
 llist_node*
 llist_insert(llist_node* to_insert, llist_node* list_head)
 {
-    if (!free_list_lock_initialized) {
-        pthread_mutex_init(&free_list_lock, 0);
-        free_list_lock_initialized = 1;
-    }
-
     if (list_head == NULL)
     {
         to_insert->next = NULL;

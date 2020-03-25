@@ -10,7 +10,7 @@
 // based on generic linked list code and lecture code
 
 typedef struct llist_node {
-    size_t size;     // size of one block
+    size_t size;     // curr size of one free block
     struct llist_node* next; // NULL if end of list
 } llist_node;
 
