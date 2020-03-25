@@ -35,16 +35,12 @@ typedef struct hm_stats {
 
 const size_t PAGE_SIZE = 4096;
 const size_t HALF_PAGE_SIZE = 2048;
-static hm_stats stats; // This initializes the stats to 0.
+__thread hm_stats stats; // This initializes the stats to 0.
 
 // Using 2 lists to store memory blocks in different size ranges to minimize the number of nodes to be searched in a particular linked list
-static llist_node* free_list_head_2048 = NULL;
-static llist_node* free_list_head_4096 = NULL;
+__thread llist_node* free_list_head_2048 = NULL;
+__thread llist_node* free_list_head_4096 = NULL;
 
-pthread_mutex_t free_list_lock_2048;
-int free_list_lock_initialized_2048 = 0;
-pthread_mutex_t free_list_lock_4096;
-int free_list_lock_initialized_4096 = 0;
 
 // For free list with mem sizes >=2048 bytes
 long
@@ -120,19 +116,9 @@ xmalloc(size_t size)
     // Return a pointer to the block after the size field.
     void* new_bstart;
     size_t new_bsize;
-    if (!free_list_lock_initialized_2048){
-        pthread_mutex_init(&free_list_lock_2048, 0);
-        free_list_lock_initialized_2048 = 1;
-    }
-
-    if (!free_list_lock_initialized_4096){
-        pthread_mutex_init(&free_list_lock_4096, 0);
-        free_list_lock_initialized_4096 = 1;
-    }
     
     // For blocks of size < 2048 bytes
     if (size < HALF_PAGE_SIZE){
-        pthread_mutex_lock(&free_list_lock_2048);
 
         //See if there’s a big enough block on the free list. If so, select the first one ...
         llist_node* node = xmallocHlp_get_free_block_2048(size);
@@ -162,8 +148,6 @@ xmalloc(size_t size)
             new_bsize = size;
         }
 
-        pthread_mutex_unlock(&free_list_lock_2048);
-
     }
     // For blocks of size >= 2048 bytes
     else{
@@ -171,8 +155,6 @@ xmalloc(size_t size)
         // Requests with (B < 1 page = 4096 bytes but >= 2048 bytes)
         if (size < PAGE_SIZE)
         {
-
-            pthread_mutex_lock(&free_list_lock_4096);
 
             //See if there’s a big enough block on the free list. If so, select the first one ...
             llist_node* node = xmallocHlp_get_free_block_4096(size);
@@ -202,7 +184,6 @@ xmalloc(size_t size)
                 new_bsize = size;
             }
 
-            pthread_mutex_unlock(&free_list_lock_4096);
         }
         else // Requests with (B >= 1 page = 4096 bytes):
         {
@@ -303,17 +284,12 @@ xfree(void* item)
     size_t bsize = *((size_t*)bstart);
 
     if(bsize < HALF_PAGE_SIZE){
-        pthread_mutex_lock(&free_list_lock_2048);
         free_list_insert_2048((llist_node*)bstart); // then stick it on the free list.
-        pthread_mutex_unlock(&free_list_lock_2048);
     }
     // If the block is < 1 page
     else if (bsize < PAGE_SIZE)
     {
-        pthread_mutex_lock(&free_list_lock_4096);
         free_list_insert_4096((llist_node*)bstart); // then stick it on the free list.
-        pthread_mutex_unlock(&free_list_lock_4096);
-
     }
     else
     {
@@ -363,7 +339,6 @@ xrealloc(void *item, size_t size) {
         new_free -= sizeof(llist_node);
         free_mem->size = new_free;
 
-        pthread_mutex_lock(&free_list_lock_4096);
         // if free list is empty add free memory to it
         if (free_list_head_4096 == NULL) {
             free_mem->next = NULL;
@@ -374,8 +349,6 @@ xrealloc(void *item, size_t size) {
         else {
             llist_insert(free_list_head_4096, free_mem);
         }
-        pthread_mutex_unlock(&free_list_lock_4096);
-
 
         return item;
     }
