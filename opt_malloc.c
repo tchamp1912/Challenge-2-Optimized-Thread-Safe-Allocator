@@ -10,14 +10,13 @@
 
 // The following papers were used as external reference:
 // 1. http://supertech.csail.mit.edu/papers/Kuszmaul15.pdf
-
+// The log and power functions were originally from geekforgeek, but the fast versions are just
+//   hacks we can do because of how we are using the functions and when wer are checking for size
+//   greater than PAGE_SIZE
 
 // #include "llist.h"
 
-
-
-llist_node* xmallocHlp_get_free_block_2048(size_t min_size);
-llist_node* xmallocHlp_get_free_block_4096(size_t min_size);
+llist_node* xmallocHlp_get_free_from_blocks(size_t min_size);
 
 /////////////////////////////////////////////////////////////////////
 ////////////////////////////// hmalloc.c ////////////////////////////
@@ -32,55 +31,120 @@ typedef struct hm_stats {
 } hm_stats;
 */
 
-
 const size_t PAGE_SIZE = 4096;
-const size_t HALF_PAGE_SIZE = 2048;
 __thread hm_stats stats; // This initializes the stats to 0.
 
-// Using 2 lists to store memory blocks in different size ranges to minimize the number of nodes to be searched in a particular linked list
-__thread llist_node* free_list_head_2048 = NULL;
-__thread llist_node* free_list_head_4096 = NULL;
+// Using N lists to store memory blocks in different size ranges to minimize
+// the number of nodes to be searched in a particular linked list
+__thread llist_node* free_list_head_BLOCKS[7] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+// max memory sizes:                               32    64   128   256   512  1024  2048
+
+// there's probably a really simple to way to gaurentee that these constants match the block lists...
+// but C is hard sometimes.
+const size_t N_BLOCKS = 7; // should be a power of 2^N_BLOCKS_POW
+const size_t MIN_BLOCK_SIZE_POW = 5;
+const size_t MIN_BLOCK_SIZE = 32;
 
 
-// For free list with mem sizes >=2048 bytes
+int
+fast_log2n(int n)
+{
+    if(n <= MIN_BLOCK_SIZE) return MIN_BLOCK_SIZE_POW; // implicitly make the minumum log 5.
+    if(n <= 64) return 6;
+    if(n <= 128) return 7;
+    if(n <= 256) return 8;
+    if(n <= 512) return 9;
+    if(n <= 1024) return 10;
+    if(n <= 2048) return 11;
+    if(n <= 4096) return 12;
+    return 13;
+}
+
+//int
+//log2n(int n)
+//{
+//    return (n > 1) ? 1 + log2n(n / 2) : 0; // too slow
+//}
+
+int
+log2_index(int pow) {
+    int exp = fast_log2n(pow);
+    return exp - MIN_BLOCK_SIZE_POW;
+}
+
+int
+fast_next_pow_of_2(size_t n)
+{
+    if(n <= MIN_BLOCK_SIZE) return MIN_BLOCK_SIZE; // implicitly make the minumum pow 32.
+    if(n <= 64) return 64;
+    if(n <= 128) return 128;
+    if(n <= 256) return 256;
+    if(n <= 512) return 512;
+    if(n <= 1024) return 1024;
+    if(n <= 2048) return 2048;
+    if(n <= 4096) return 4096;
+    return 8192;
+}
+
+//int
+//next_pow_of_2(size_t n)
+//{
+//    if (n <= MIN_BLOCK_SIZE){
+//        return MIN_BLOCK_SIZE;
+//    }
+//
+//    unsigned count = 0;
+//
+//    // First n in the below condition
+//    // is for the case where n is 0
+//    if (n && !(n & (n - 1)))
+//        return n;
+//
+//    while( n != 0)
+//    {
+//        n >>= 1;
+//        count += 1;
+//    }
+//
+//    return 1 << count;
+//}
+
+
 long
-free_list_length_4096()
+free_list_length(size_t mem_size)
 {
-    return llist_length(free_list_head_4096);
+    int pow = fast_next_pow_of_2(mem_size);
+    int exp = log2_index(pow);
+
+    return llist_length(free_list_head_BLOCKS[exp]);
 }
 
-// For the list of mem sizes <= 2048 bytes
-long
-free_list_length_2048()
-{
-    return llist_length(free_list_head_2048);
-}
-
-// For the free list with memsizes >=2048 
 void
-free_list_insert_4096(llist_node* node)
+free_list_insert(llist_node* node, size_t mem_size)
 {
-    free_list_head_4096 = llist_insert(node, free_list_head_4096);
-}
+    int pow = fast_next_pow_of_2(mem_size);
+    int exp = log2_index(pow);
 
-// For the free list with memsize <=2048
-void
-free_list_insert_2048(llist_node* node)
-{
-    free_list_head_2048= llist_insert(node, free_list_head_2048);
+    free_list_head_BLOCKS[exp] = llist_insert(node, free_list_head_BLOCKS[exp]);
 }
 
 hm_stats*
 hgetstats()
 {
-    stats.free_length = free_list_length_4096() + free_list_length_2048();
+    size_t ss = MIN_BLOCK_SIZE;
+    while(ss <= 4096) {
+        stats.free_length += free_list_length(ss);
+    }
     return &stats;
 }
 
 void
 hprintstats()
 {
-    stats.free_length = free_list_length_4096() + free_list_length_2048();
+    size_t ss = MIN_BLOCK_SIZE;
+    while(ss <= 4096) {
+        stats.free_length += free_list_length(ss);
+    }
     fprintf(stderr, "\n== husky malloc stats ==\n");
     fprintf(stderr, "Mapped:   %ld\n", stats.pages_mapped);
     fprintf(stderr, "Unmapped: %ld\n", stats.pages_unmapped);
@@ -116,12 +180,13 @@ xmalloc(size_t size)
     // Return a pointer to the block after the size field.
     void* new_bstart;
     size_t new_bsize;
-    
-    // For blocks of size < 2048 bytes
-    if (size < HALF_PAGE_SIZE){
+
+    // Requests with (B < 1 page = 4096 bytes but >= 2048 bytes)
+    if (size < PAGE_SIZE)
+    {
 
         //See if there’s a big enough block on the free list. If so, select the first one ...
-        llist_node* node = xmallocHlp_get_free_block_2048(size);
+        llist_node* node = xmallocHlp_get_free_from_blocks(size);
 
         //  ... and remove it from the list.
         if (node != NULL)
@@ -133,7 +198,7 @@ xmalloc(size_t size)
         {
             new_bsize = PAGE_SIZE;
             new_bstart = mmap(NULL, new_bsize, PROT_READ | PROT_WRITE,
-                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+                              MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
             assert(new_bstart != 0);
             stats.pages_mapped += 1;
         }
@@ -144,58 +209,22 @@ xmalloc(size_t size)
         {
             llist_node* new_block = (llist_node*)(new_bstart + size);
             new_block->size = new_bsize - size;
-            free_list_insert_2048(new_block);
+            free_list_insert(new_block, size);
             new_bsize = size;
         }
 
     }
-    // For blocks of size >= 2048 bytes
-    else{
+    else // Requests with (B >= 1 page = 4096 bytes):
+    {
+        size_t num_pages = div_up(size, PAGE_SIZE); // Calculate the number of pages needed for this block.
+        new_bsize = PAGE_SIZE * num_pages; // // Allocate that many pages
+        new_bstart = mmap(NULL, new_bsize, PROT_READ | PROT_WRITE, // with mmap
+                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
-        // Requests with (B < 1 page = 4096 bytes but >= 2048 bytes)
-        if (size < PAGE_SIZE)
-        {
-
-            //See if there’s a big enough block on the free list. If so, select the first one ...
-            llist_node* node = xmallocHlp_get_free_block_4096(size);
-
-            //  ... and remove it from the list.
-            if (node != NULL)
-            {
-                new_bstart = (void*)node;
-                new_bsize = node->size;
-            }
-            else // If you don’t have a block, mmap a new block (1 page)
-            {
-                new_bsize = PAGE_SIZE;
-                new_bstart = mmap(NULL, new_bsize, PROT_READ | PROT_WRITE,
-                                MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-                assert(new_bstart != 0);
-                stats.pages_mapped += 1;
-            }
-
-            // If the block is bigger than the request, and the leftover is big enough to
-            // store a free list cell, return the extra to the free list.
-            if (new_bsize - size > sizeof(llist_node))
-            {
-                llist_node* new_block = (llist_node*)(new_bstart + size);
-                new_block->size = new_bsize - size;
-                free_list_insert_4096(new_block);
-                new_bsize = size;
-            }
-
-        }
-        else // Requests with (B >= 1 page = 4096 bytes):
-        {
-            size_t num_pages = div_up(size, PAGE_SIZE); // Calculate the number of pages needed for this block.
-            new_bsize = PAGE_SIZE * num_pages; // // Allocate that many pages
-            new_bstart = mmap(NULL, new_bsize, PROT_READ | PROT_WRITE, // with mmap
-                            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-
-            assert(new_bstart != 0);
-            stats.pages_mapped += num_pages;
-        }
+        assert(new_bstart != 0);
+        stats.pages_mapped += num_pages;
     }
+
     *((size_t*)new_bstart) = new_bsize;
     return new_bstart + sizeof(size_t);
 }
@@ -203,55 +232,22 @@ xmalloc(size_t size)
 // See if there’s a big enough block on the free list. If so, select the first one, remove it from the list, and return int
 // if not, return null
 llist_node*
-xmallocHlp_get_free_block_4096(size_t min_size)
+xmallocHlp_get_free_from_blocks(size_t min_size)
 {
-    if (free_list_head_4096 == NULL)
+    int blockii = log2_index(fast_next_pow_of_2(min_size));
+    llist_node* free_head = free_list_head_BLOCKS[blockii];
+
+    if (free_head == NULL)
     {
         return NULL;
     }
 
-    llist_node* nn = free_list_head_4096;
+    llist_node* nn = free_head;
 
     //head is big enough to use
-    if (free_list_head_4096->size >= min_size)
+    if (free_head->size >= min_size)
     {
-        free_list_head_4096 = free_list_head_4096->next;
-        return nn;
-    }
-
-    llist_node* pp;
-
-    //iterate through the rest of the nodes
-    do
-    {
-        pp = nn; // need to update prev b4 iterating
-        nn = nn->next;
-
-        //stop if end of list OR found block big enough
-    } while (nn != NULL && nn->size < min_size);
-
-    if (nn != NULL) // didn't reach end of list
-    {
-        pp->next = nn->next;
-    }
-
-    return nn;
-}
-
-llist_node*
-xmallocHlp_get_free_block_2048(size_t min_size)
-{
-    if (free_list_head_2048 == NULL)
-    {
-        return NULL;
-    }
-
-    llist_node* nn = free_list_head_2048;
-
-    //head is big enough to use
-    if (free_list_head_2048->size >= min_size)
-    {
-        free_list_head_2048 = free_list_head_2048->next;
+        free_list_head_BLOCKS[blockii] = free_head->next;
         return nn;
     }
 
@@ -283,13 +279,9 @@ xfree(void* item)
     void* bstart = item - sizeof(size_t);
     size_t bsize = *((size_t*)bstart);
 
-    if(bsize < HALF_PAGE_SIZE){
-        free_list_insert_2048((llist_node*)bstart); // then stick it on the free list.
-    }
-    // If the block is < 1 page
-    else if (bsize < PAGE_SIZE)
+    if (bsize < PAGE_SIZE)
     {
-        free_list_insert_4096((llist_node*)bstart); // then stick it on the free list.
+        free_list_insert((llist_node*)bstart, bsize); // then stick it on the free list in the correct block
     }
     else
     {
@@ -339,15 +331,17 @@ xrealloc(void *item, size_t size) {
         new_free -= sizeof(llist_node);
         free_mem->size = new_free;
 
+        int blockii = N_BLOCKS - 1; // for now, just use the largest block
+        llist_node* free_head = free_list_head_BLOCKS[blockii];
         // if free list is empty add free memory to it
-        if (free_list_head_4096 == NULL) {
+        if (free_head == NULL) {
             free_mem->next = NULL;
-            free_list_head_4096 = free_mem;
+            free_list_head_BLOCKS[blockii] = free_mem;
 
         }
         // if not first element add to free list
         else {
-            llist_insert(free_list_head_4096, free_mem);
+            llist_insert(free_head, free_mem);
         }
 
         return item;
