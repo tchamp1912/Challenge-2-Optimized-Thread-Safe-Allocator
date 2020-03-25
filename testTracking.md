@@ -1,6 +1,6 @@
 ## Last Test Ran:
 
-Unnas, commit  7d3abbca26885cb44fdaf0ad59b45c8e73a99094  
+Unnas, commit  40b408d7e2997e60662fa94e6cdbf003f2fbb557  
 
 ```
 1..14
@@ -13,9 +13,7 @@ not ok 2 - graph.png exists and isn't executable
 ok 3 - ivec-sys 1k
 ok 4 - list-sys 1k
 ok 5 - list-hwx 100
-not ok 6 - ivec-hwx 100
-#   Failed test 'ivec-hwx 100'
-#   at test.pl line 48.
+ok 6 - ivec-hwx 100
 not ok 7 - ivec-par 1k
 #   Failed test 'ivec-par 1k'
 #   at test.pl line 52.
@@ -38,6 +36,6 @@ not ok 13 - fragmentation test
 #   Failed test 'fragmentation test'
 #   at test.pl line 76.
 ok 14 - clang check
-# Looks like you failed 10 tests of 14.
+# Looks like you failed 9 tests of 14.
 
 ```
