@@ -110,20 +110,19 @@ div_up(size_t xx, size_t yy)
 void*
 xmalloc(size_t size)
 {
-    
-
     stats.chunks_allocated += 1;
     size += sizeof(size_t);
+    // Use the start of the block to store its size.
+    // Return a pointer to the block after the size field.
+    void* new_bstart;
+    size_t new_bsize;
     
-    // For blocks of size <= 2048 bytes
+    // For blocks of size < 2048 bytes
     if (size < HALF_PAGE_SIZE){
         if (!free_list_lock_initialized_2048){
             pthread_mutex_init(&free_list_lock_2048, 0);
             free_list_lock_initialized_2048 = 1;
         }
-
-        void* new_bstart;
-        size_t new_bsize;
 
         pthread_mutex_lock(&free_list_lock_2048);
 
@@ -158,16 +157,13 @@ xmalloc(size_t size)
         pthread_mutex_unlock(&free_list_lock_4096);
 
     }
-    // For blocks of size >= 4096 bytes
+    // For blocks of size >= 2048 bytes
     else{
         if (!free_list_lock_initialized_4096) {
             pthread_mutex_init(&free_list_lock_4096, 0);
             free_list_lock_initialized_4096 = 1;
         }
-        // Use the start of the block to store its size.
-        // Return a pointer to the block after the size field.
-        void* new_bstart;
-        size_t new_bsize;
+        
 
         // Requests with (B < 1 page = 4096 bytes but >= 2048 bytes)
         if (size < PAGE_SIZE)
@@ -215,10 +211,9 @@ xmalloc(size_t size)
             assert(new_bstart != 0);
             stats.pages_mapped += num_pages;
         }
-
-        *((size_t*)new_bstart) = new_bsize;
-        return new_bstart + sizeof(size_t);
     }
+    *((size_t*)new_bstart) = new_bsize;
+    return new_bstart + sizeof(size_t);
 }
 
 // See if there’s a big enough block on the free list. If so, select the first one, remove it from the list, and return int
