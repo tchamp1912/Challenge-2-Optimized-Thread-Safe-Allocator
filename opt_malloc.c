@@ -15,6 +15,10 @@
 // #include "llist.h"
 
 
+
+llist_node* xmallocHlp_get_free_block_2048(size_t min_size);
+llist_node* xmallocHlp_get_free_block_4096(size_t min_size);
+
 /////////////////////////////////////////////////////////////////////
 ////////////////////////////// hmalloc.c ////////////////////////////
 
@@ -116,14 +120,18 @@ xmalloc(size_t size)
     // Return a pointer to the block after the size field.
     void* new_bstart;
     size_t new_bsize;
+    if (!free_list_lock_initialized_2048){
+        pthread_mutex_init(&free_list_lock_2048, 0);
+        free_list_lock_initialized_2048 = 1;
+    }
+
+    if (!free_list_lock_initialized_4096){
+        pthread_mutex_init(&free_list_lock_4096, 0);
+        free_list_lock_initialized_4096 = 1;
+    }
     
     // For blocks of size < 2048 bytes
     if (size < HALF_PAGE_SIZE){
-        if (!free_list_lock_initialized_2048){
-            pthread_mutex_init(&free_list_lock_2048, 0);
-            free_list_lock_initialized_2048 = 1;
-        }
-
         pthread_mutex_lock(&free_list_lock_2048);
 
         //See if there’s a big enough block on the free list. If so, select the first one ...
@@ -154,16 +162,11 @@ xmalloc(size_t size)
             new_bsize = size;
         }
 
-        pthread_mutex_unlock(&free_list_lock_4096);
+        pthread_mutex_unlock(&free_list_lock_2048);
 
     }
     // For blocks of size >= 2048 bytes
     else{
-        if (!free_list_lock_initialized_4096) {
-            pthread_mutex_init(&free_list_lock_4096, 0);
-            free_list_lock_initialized_4096 = 1;
-        }
-        
 
         // Requests with (B < 1 page = 4096 bytes but >= 2048 bytes)
         if (size < PAGE_SIZE)
