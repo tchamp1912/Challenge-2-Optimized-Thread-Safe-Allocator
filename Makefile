@@ -25,13 +25,13 @@ collatz-list-hwx: list_main.o hwx_malloc.o
 collatz-ivec-hwx: ivec_main.o hwx_malloc.o
 	gcc $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-collatz-list-opt: list_main.o opt_malloc.o
+collatz-list-opt: list_main.o opt_malloc.o barrier.o
 	gcc $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-collatz-ivec-opt: ivec_main.o opt_malloc.o
+collatz-ivec-opt: ivec_main.o opt_malloc.o barrier.o
 	gcc $(CFLAGS) -o $@ $^ $(LDLIBS)
 
-frag-opt: frag_main.o opt_malloc.o
+frag-opt: frag_main.o opt_malloc.o barrier.o
 	gcc $(CFLAGS) -o $@ $^ $(LDLIBS)
 
 frag-sys: frag_main.o sys_malloc.o
