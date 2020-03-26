@@ -2,21 +2,22 @@ Authors: Unnas Hussain, Thomas Campion, Praneet Kumar Pandey
 
 >>>--- Report.txt --- <<<
 
-The slowest allocatar was the hw-list allocator. It reached an input 
-of 2500 at 9.80 seconds.
+The slowest allocatar was the hwx-list allocator. It reached an input of 2500 at 9.80 seconds. The optimized ivec allocator was the  
+fastest and improved the hwx list allocator by 9.74s.
 
 |               | hwx-list         | hwx-ivec | opt-list | opt-ivec |
 |---------------|------------------|----------|----------|----------|
 | @ input=2500  |  9.80s *slowest  | 0.21s    | 0.22s    | 0.06s    |
-| improvement   | 0s               |          |          |          |
+| improvement   | 0s               | 9.59s    | 9.58s    | 9.74s    |
 
-The slowest allocatar was the opt-list allocator. It reached an input 
-of 16500 at 9.80 seconds.
+The slowest allocatar was the opt-list allocator. It reached an 
+input of 16500 at 9.69 seconds. The system ivec allocator was the 
+fastest and improved the opt list allocator by 9.67s.
 
 |               | opt-list         | opt-ivec | sys-list | sys-ivec |
 |---------------|------------------|----------|----------|----------|
 | @ input=16500 | 9.69 *slowest    | 3.34s    | 0.12s    | 0.02s    |
-| improvement   | 0s               |          |          |          |
+| improvement   | 0s               | 6.35s    | 9.57s    | 9.67s    |
 
 
 --- Techniques used for the optimized allocator ---
@@ -31,7 +32,9 @@ chunks. Our best guess is that for smaller buckets the time required
 to access them is more than than the time reduction we gain from
 actually using them in the first place.
 
-2. Thread-local storage is used to keep list access safe.
+2. Thread-local storage is used to keep list access safe. This was
+to replace mutex locks, which block execution and therefore slow
+down execution when dealing with multi-threaded programs.
 
 
 --- Reusing memory ---
@@ -53,7 +56,7 @@ fact that the approach didn't work as a whole made us drop it.
 
 Since our implementation is quite straightforward with how the buddy
 system, buckets and thread-local techniques are used, for our files
-fincluded in the submission, we did not face any significant problems
+included in the submission, we did not face any significant problems
 
 However, we did fail in resolving the seg faults that kept occurring
 in some of the additional techniques we were planning to use. Like
