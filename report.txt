@@ -1,0 +1,15 @@
+
+
+The slowest alloctar was the hw-list allocator. It reached an input of 2500 at 9.80 seconds.
+
+|               | hwx-list         | hwx-ivec | opt-list | opt-ivec |
+|---------------|------------------|----------|----------|----------|
+| @ input=2500  |  9.80s *slowest  | 0.21s    | 0.22s    | 0.06s    |
+| improvement   | 0s               |          |          |          |
+
+The slowest alloctar was the opt-list allocator. It reached an input of 16500 at 9.80 seconds.
+
+|               | opt-list         | opt-ivec | sys-list | sys-ivec |
+|---------------|------------------|----------|----------|----------|
+| @ input=16500 | 9.69 *slowest    | 3.34s    | 0.12s    | 0.02s    |
+| improvement   | 0s               |          |          |          |
