@@ -2,7 +2,8 @@ Authors: Unnas Hussain, Thomas Campion, Praneet Kumar Pandey
 
 >>>--- Report.txt --- <<<
 
-The slowest allocatar was the hwx-list allocator. It reached an input of 2500 at 9.80 seconds. The optimized ivec allocator was the  
+The slowest allocatar was the hwx-list allocator. It reached an 
+input of 2500 at 9.80 seconds. The optimized ivec allocator was the  
 fastest and improved the hwx list allocator by 9.74s.
 
 |               | hwx-list         | hwx-ivec | opt-list | opt-ivec |
