@@ -36,7 +36,16 @@ __thread hm_stats stats; // This initializes the stats to 0.
 
 // Using N lists to store memory blocks in different size ranges to minimize
 // the number of nodes to be searched in a particular linked list
-__thread llist_node* free_list_head_BLOCKS[7] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
+
+__thread llist_node* free_list_head_BLOCK0 = NULL; // 32
+__thread llist_node* free_list_head_BLOCK1 = NULL; // 64
+__thread llist_node* free_list_head_BLOCK2 = NULL; // 128
+__thread llist_node* free_list_head_BLOCK3 = NULL; // 256
+__thread llist_node* free_list_head_BLOCK4 = NULL; // 512
+__thread llist_node* free_list_head_BLOCK5 = NULL; // 1024
+__thread llist_node* free_list_head_BLOCK6 = NULL; // 2048
+
+//__thread llist_node* free_list_head_BLOCKS[7] = {NULL, NULL, NULL, NULL, NULL, NULL, NULL};
 // max memory sizes:                               32    64   128   256   512  1024  2048
 
 // there's probably a really simple to way to gaurentee that these constants match the block lists...
@@ -44,6 +53,18 @@ __thread llist_node* free_list_head_BLOCKS[7] = {NULL, NULL, NULL, NULL, NULL, N
 const size_t N_BLOCKS = 7; // should be a power of 2^N_BLOCKS_POW
 const size_t MIN_BLOCK_SIZE_POW = 5;
 const size_t MIN_BLOCK_SIZE = 32;
+
+llist_node*
+get_free_list_head_n(int n) {
+    if(n == 0) return free_list_head_BLOCK0;
+    if(n == 1) return free_list_head_BLOCK1;
+    if(n == 2) return free_list_head_BLOCK2;
+    if(n == 3) return free_list_head_BLOCK3;
+    if(n == 4) return free_list_head_BLOCK4;
+    if(n == 5) return free_list_head_BLOCK5;
+    if(n == 6) return free_list_head_BLOCK6;
+    abort();
+}
 
 
 int
@@ -116,7 +137,7 @@ free_list_length(size_t mem_size)
     int pow = fast_next_pow_of_2(mem_size);
     int exp = log2_index(pow);
 
-    return llist_length(free_list_head_BLOCKS[exp]);
+    return llist_length(get_free_list_head_n(exp));
 }
 
 void
@@ -125,7 +146,8 @@ free_list_insert(llist_node* node, size_t mem_size)
     int pow = fast_next_pow_of_2(mem_size);
     int exp = log2_index(pow);
 
-    free_list_head_BLOCKS[exp] = llist_insert(node, free_list_head_BLOCKS[exp]);
+    llist_node* free_list_head = get_free_list_head_n(exp);
+    free_list_head = llist_insert(node, free_list_head);
 }
 
 hm_stats*
@@ -235,7 +257,7 @@ llist_node*
 xmallocHlp_get_free_from_blocks(size_t min_size)
 {
     int blockii = log2_index(fast_next_pow_of_2(min_size));
-    llist_node* free_head = free_list_head_BLOCKS[blockii];
+    llist_node* free_head = get_free_list_head_n(blockii);
 
     if (free_head == NULL)
     {
@@ -247,7 +269,7 @@ xmallocHlp_get_free_from_blocks(size_t min_size)
     //head is big enough to use
     if (free_head->size >= min_size)
     {
-        free_list_head_BLOCKS[blockii] = free_head->next;
+        free_head = free_head->next;
         return nn;
     }
 
@@ -331,12 +353,12 @@ xrealloc(void *item, size_t size) {
         new_free -= sizeof(llist_node);
         free_mem->size = new_free;
 
-        int blockii = N_BLOCKS - 1; // for now, just use the largest block
-        llist_node* free_head = free_list_head_BLOCKS[blockii];
+        int blockii = log2_index(fast_next_pow_of_2(size));
+        llist_node* free_head = get_free_list_head_n(blockii);
         // if free list is empty add free memory to it
         if (free_head == NULL) {
             free_mem->next = NULL;
-            free_list_head_BLOCKS[blockii] = free_mem;
+            free_head = free_mem;
 
         }
         // if not first element add to free list
