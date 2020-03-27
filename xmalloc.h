@@ -5,6 +5,6 @@
 
 void* xmalloc(size_t bytes);
 void  xfree(void* ptr);
-void* xrealloc(void* prev, size_t bytes);
+void* xrealloc(void* item, size_t size);
 
 #endif
