@@ -1,0 +1,78 @@
+Authors: Unnas Hussain, Thomas Campion, Praneet Kumar Pandey
+
+>>>--- Report.txt --- <<<
+
+The slowest allocatar was the hwx-list allocator. It reached an 
+input of 2500 at 9.80 seconds. The optimized ivec allocator was the  
+fastest and improved the hwx list allocator by 9.74s.
+
+|               | hwx-list         | hwx-ivec | opt-list | opt-ivec |
+|---------------|------------------|----------|----------|----------|
+| @ input=2500  |  9.80s *slowest  | 0.21s    | 0.22s    | 0.06s    |
+| improvement   | 0s               | 9.59s    | 9.58s    | 9.74s    |
+
+The slowest allocatar was the opt-list allocator. It reached an 
+input of 16500 at 9.69 seconds. The system ivec allocator was the 
+fastest and improved the opt list allocator by 9.67s.
+
+|               | opt-list         | opt-ivec | sys-list | sys-ivec |
+|---------------|------------------|----------|----------|----------|
+| @ input=16500 | 9.69 *slowest    | 3.34s    | 0.12s    | 0.02s    |
+| improvement   | 0s               | 6.35s    | 9.57s    | 9.67s    |
+
+
+--- Techniques used for the optimized allocator ---
+
+1. Buddy system and buckets:
+2 separate free lists are used which both handle memory chunks of 
+different sizes. We intended to use multiple lists (up to 6 or 7),
+with varying sizes (starting from 32 bytes and moving upwards in
+powers of 2 up to 2048) but that somehow made the memory
+allocation slower, even for the tests with smaller sized memory 
+chunks. Our best guess is that for smaller buckets the time required
+to access them is more than than the time reduction we gain from
+actually using them in the first place.
+
+2. Thread-local storage is used to keep list access safe. This was
+to replace mutex locks, which block execution and therefore slow
+down execution when dealing with multi-threaded programs.
+
+
+--- Reusing memory ---
+
+Since we are using only 2 lists they work separately similar to the 
+original plan for husky malloc in assignment 8. Depending on the 
+chunk size, memory is either freed with munmap of returned back to 
+the appropriate list.
+
+--- Significant Challenges ---
+
+Deciding how memory was going to be handled for both of the buddy
+buckets that we used was a choice between using separate functions
+for them or using the techniques discussed by Prof. Tuck in class in
+which we use a header to identify which was which. We chose to go 
+with the former as we only had 2 lists. Although we did succesfully
+implement Prof. Tuck's technique when we tried using 2+ lists, the 
+fact that the approach didn't work as a whole made us drop it.
+
+Since our implementation is quite straightforward with how the buddy
+system, buckets and thread-local techniques are used, for our files
+included in the submission, we did not face any significant problems
+
+However, we did fail in resolving the seg faults that kept occurring
+in some of the additional techniques we were planning to use. Like
+mentioned before we tried using up to 7 buckets and also the multiple
+arenas technique and failed to solve the segmentation faults for them
+
+--- Redoing the assignment ---
+
+We are confident that given enough time we would be able to resolve
+the seg faults that occurred with using 2+ lists and other issues we
+faced with using multiple arenas. We are also confident that with
+those changes we would be able to make an allocator faster than the
+system. As of now, however, our optimized allocator is surely faster
+than the unoptimized hwx allocator, but falls short of the system
+allocator. 
+
+--- References ---
+1. http://supertech.csail.mit.edu/papers/Kuszmaul15.pdf
